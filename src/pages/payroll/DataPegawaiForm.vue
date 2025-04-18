@@ -3,7 +3,16 @@
         <div class="row">
             <div class="col-sm-12">
                 <Card3 colClass="col-sm-12" headerTitle="true" :title="isEditMode ? 'Edit Data Pegawai' : 'Tambah Data Pegawai'" cardhaderClass="card-no-border">
-                    <div class="card-body">
+                    <div v-if="isLoading" class="text-center p-5">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-2">{{ isEditMode ? 'Memuat data pegawai...' : 'Mempersiapkan formulir...' }}</p>
+                    </div>
+                    <div v-else-if="error" class="alert alert-danger m-3">
+                        {{ error }}
+                    </div>
+                    <div v-else class="card-body">
                         <form @submit.prevent="savePegawai">
                             <div class="row">
                                 <div class="col-md-6 mb-3">
@@ -43,7 +52,10 @@
                             </div>
                             <div class="d-flex justify-content-end mt-4">
                                 <router-link to="/payroll/data-pegawai" class="btn btn-secondary me-2">Batal</router-link>
-                                <button type="submit" class="btn btn-primary">{{ isEditMode ? 'Update' : 'Simpan' }}</button>
+                                <button type="submit" class="btn btn-primary" :disabled="isSubmitting">
+                                    <span v-if="isSubmitting" class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                                    {{ isEditMode ? 'Update' : 'Simpan' }}
+                                </button>
                             </div>
                         </form>
                     </div>
@@ -80,32 +92,64 @@ const formData = ref<{
     status: 'Aktif'
 })
 
+const isSubmitting = ref(false)
+
+// Access loading and error states from the store
+const isLoading = computed(() => pegawaiStore.isLoading.value)
+const error = computed(() => pegawaiStore.error.value)
+
 const isEditMode = computed(() => {
     return route.params.id !== undefined
 })
 
-onMounted(() => {
-    if (isEditMode.value) {
-        const pegawaiId = parseInt(route.params.id as string)
-        const pegawai = pegawaiStore.getPegawaiById(pegawaiId)
-        
-        if (pegawai) {
-            formData.value = { ...pegawai }
-        } else {
-            // Handle case when employee is not found
-            router.push('/payroll/data-pegawai')
+onMounted(async () => {
+    try {
+        // Load departments and positions if not already loaded
+        if (!pegawaiStore.departemenList.value.length || !pegawaiStore.jabatanList.value.length) {
+            await pegawaiStore.fetchPegawaiList()
         }
+        
+        // If in edit mode, fetch employee data
+        if (isEditMode.value) {
+            const pegawaiId = parseInt(route.params.id as string)
+            
+            // Check if the data is already loaded in the store
+            let pegawai = pegawaiStore.getPegawaiById(pegawaiId)
+            
+            // If not found in store, fetch it
+            if (!pegawai) {
+                await pegawaiStore.fetchPegawaiList()
+                pegawai = pegawaiStore.getPegawaiById(pegawaiId)
+            }
+            
+            if (pegawai) {
+                formData.value = { ...pegawai }
+            } else {
+                // Handle case when employee is not found
+                router.push('/payroll/data-pegawai')
+            }
+        }
+    } catch (err) {
+        console.error('Failed to load employee data:', err)
     }
 })
 
-function savePegawai() {
-    if (isEditMode.value) {
-        pegawaiStore.updatePegawai({ ...formData.value, id: formData.value.id ?? 0 })
-    } else {
-        const newPegawai = { ...formData.value, id: 0 }
-        pegawaiStore.addPegawai(newPegawai)
+async function savePegawai() {
+    try {
+        isSubmitting.value = true
+        
+        if (isEditMode.value) {
+            await pegawaiStore.updatePegawai({ ...formData.value, id: formData.value.id ?? 0 })
+        } else {
+            const newPegawai = { ...formData.value, id: 0 }
+            await pegawaiStore.addPegawai(newPegawai)
+        }
+        
+        router.push('/payroll/data-pegawai')
+    } catch (err) {
+        console.error('Failed to save employee:', err)
+    } finally {
+        isSubmitting.value = false
     }
-    
-    router.push('/payroll/data-pegawai')
 }
 </script>

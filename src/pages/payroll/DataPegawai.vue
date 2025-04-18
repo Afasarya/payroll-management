@@ -12,7 +12,16 @@
                             </div>
                         </div>
                     </div>
-                    <div class="table-responsive theme-scrollbar">
+                    <div v-if="isLoading" class="text-center p-5">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-2">Mengambil data pegawai...</p>
+                    </div>
+                    <div v-else-if="error" class="alert alert-danger m-3">
+                        {{ error }}
+                    </div>
+                    <div v-else class="table-responsive theme-scrollbar">
                         <form>
                             <div class="m-3 row justify-content-end">
                                 <label for="table-search" class="col-xs-3 col-sm-auto col-form-label">Search:</label>
@@ -110,7 +119,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, defineAsyncComponent, onMounted, watch } from 'vue'
+import { ref, defineAsyncComponent, onMounted, watch, computed } from 'vue'
 import { usePegawaiStore } from "@/store/pegawai"
 import { Modal } from 'bootstrap'
 
@@ -124,14 +133,25 @@ const allData = ref<any>([])
 const deleteId = ref<number | null>(null)
 let deleteModal: any = null
 
-onMounted(() => {
-    allData.value = pegawaiStore.pegawaiList
-    // Initialize the delete modal
-    deleteModal = new Modal(document.getElementById('deleteModal'))
+// Access loading and error states from the store
+const isLoading = computed(() => pegawaiStore.isLoading.value)
+const error = computed(() => pegawaiStore.error.value)
+
+onMounted(async () => {
+    try {
+        // Fetch employee data from API
+        await pegawaiStore.fetchPegawaiList()
+        allData.value = pegawaiStore.pegawaiList.value
+        
+        // Initialize the delete modal
+        deleteModal = new Modal(document.getElementById('deleteModal'))
+    } catch (err) {
+        console.error('Failed to load employees:', err)
+    }
 })
 
 watch(filterQuery, (search: string) => {
-    var filteredData = pegawaiStore.pegawaiList.filter((row) => {
+    var filteredData = pegawaiStore.pegawaiList.value.filter((row: any) => {
         return (
             row.nama.toLowerCase().includes(search.toLowerCase()) ||
             row.jabatan.toLowerCase().includes(search.toLowerCase()) ||
@@ -139,7 +159,7 @@ watch(filterQuery, (search: string) => {
             row.status.toLowerCase().includes(search.toLowerCase())
         );
     });
-    search === "" ? allData.value = pegawaiStore.pegawaiList : allData.value = filteredData
+    search === "" ? allData.value = pegawaiStore.pegawaiList.value : allData.value = filteredData
 })
 
 function formatDate(dateString: string): string {
@@ -182,13 +202,21 @@ function confirmDelete(id: number) {
     deleteModal.show()
 }
 
-function deletePegawai() {
+async function deletePegawai() {
     if (deleteId.value !== null) {
-        pegawaiStore.deletePegawai(deleteId.value)
-        allData.value = pegawaiStore.pegawaiList
-        // Reset pagination if needed
-        if (currentPage.value > num_pages() && currentPage.value > 1) {
-            currentPage.value = num_pages()
+        try {
+            // Delete employee using API
+            await pegawaiStore.deletePegawai(deleteId.value)
+            
+            // Update local data
+            allData.value = pegawaiStore.pegawaiList.value
+            
+            // Reset pagination if needed
+            if (currentPage.value > num_pages() && currentPage.value > 1) {
+                currentPage.value = num_pages()
+            }
+        } catch (err) {
+            console.error('Failed to delete employee:', err)
         }
     }
 }
