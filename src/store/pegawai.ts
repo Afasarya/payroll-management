@@ -177,6 +177,8 @@ export const usePegawaiStore = defineStore('pegawai', {
     },
     deletePegawai(id: number) {
       this.pegawaiList = this.pegawaiList.filter(p => p.id !== id);
+      // Also delete any payroll data for this employee
+      this.pegawaiPayrollList = this.pegawaiPayrollList.filter(p => p.pegawaiId !== id);
     },
     getPegawaiById(id: number) {
       return this.pegawaiList.find(p => p.id === id);
