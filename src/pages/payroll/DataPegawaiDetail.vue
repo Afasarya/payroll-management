@@ -1,15 +1,6 @@
 <template>
-    <div class="container-fluid">
-        <div v-if="isLoading" class="text-center p-5">
-            <div class="spinner-border text-primary" role="status">
-                <span class="visually-hidden">Loading...</span>
-            </div>
-            <p class="mt-2">Memuat detail pegawai...</p>
-        </div>
-        <div v-else-if="error" class="alert alert-danger m-3">
-            {{ error }}
-        </div>
-        <div v-else-if="pegawai" class="row">
+    <div class="container-fluid" v-if="pegawai">
+        <div class="row">
             <div class="col-xl-12">
                 <Card3 colClass="col-sm-12" headerTitle="true" title="Detail Pegawai" cardhaderClass="card-no-border">
                     <div class="card-header-right">
@@ -96,7 +87,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, defineAsyncComponent, onMounted, computed } from 'vue'
+import { ref, defineAsyncComponent, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { usePegawaiStore } from "@/store/pegawai"
 
@@ -127,11 +118,6 @@ const pegawaiStore = usePegawaiStore()
 
 const pegawai = ref<Pegawai | null>(null)
 const pegawaiPayroll = ref<PegawaiPayroll | null>(null)
-
-// Access loading and error states from the store
-const isLoading = computed(() => pegawaiStore.isLoading.value)
-const error = computed(() => pegawaiStore.error.value)
-
 function formatDate(dateString: string): string {
     const date = new Date(dateString)
     return date.toLocaleDateString('id-ID', {
@@ -145,40 +131,16 @@ function formatCurrency(value: number): string {
     return new Intl.NumberFormat('id-ID').format(value)
 }
 
-onMounted(async () => {
-    try {
-        const id = Number(route.params.id)
-        
-        // Check if employee data is already loaded in the store
-        let result = pegawaiStore.getPegawaiById(id)
-        
-        // If not found in store, fetch employee data
-        if (!result) {
-            await pegawaiStore.fetchPegawaiList()
-            result = pegawaiStore.getPegawaiById(id)
-        }
-        
-        if (result) {
-            pegawai.value = result as Pegawai
-            
-            // Check if employee payroll data is already loaded in the store
-            let payroll = pegawaiStore.getPegawaiPayrollByPegawaiId(id)
-            
-            // If not found in store, fetch employee payroll data
-            if (!payroll) {
-                await pegawaiStore.fetchPegawaiPayrollList()
-                payroll = pegawaiStore.getPegawaiPayrollByPegawaiId(id)
-            }
-            
-            if (payroll) {
-                pegawaiPayroll.value = payroll as PegawaiPayroll
-            }
-        } else {
-            // If employee not found, redirect to the employee list
-            router.push('/payroll/data-pegawai')
-        }
-    } catch (err) {
-        console.error('Failed to load employee details:', err)
+onMounted(() => {
+    const id = Number(route.params.id)
+    const result = pegawaiStore.pegawaiList.find((p: Pegawai) => p.id === id)
+    
+    if (result) {
+        pegawai.value = result
+
+    } else {
+
+        router.push('/payroll/data-pegawai')
     }
 })
 </script>

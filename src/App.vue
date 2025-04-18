@@ -34,7 +34,7 @@ function add() {
 onMounted(() => {
   let allBgImageCover = document.getElementsByClassName('bg-img-cover');
   window.addEventListener('beforeunload', add)
-  useProductsStore().intialUpload(JSON.parse(localStorage.getItem('cart')) || [])
+  useProductsStore().intialUpload(JSON.parse(localStorage.getItem('cart') || '[]'))
   setTimeout(() => {
     for (let i = 0; i < allBgImageCover.length; i++) {
       var image = allBgImageCover[i]

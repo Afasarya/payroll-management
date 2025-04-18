@@ -3,16 +3,7 @@
         <div class="row">
             <div class="col-sm-12">
                 <Card3 colClass="col-sm-12" headerTitle="true" :title="isEditMode ? 'Edit Data Payroll Pegawai' : 'Tambah Data Payroll Pegawai'" cardhaderClass="card-no-border">
-                    <div v-if="isLoading" class="text-center p-5">
-                        <div class="spinner-border text-primary" role="status">
-                            <span class="visually-hidden">Loading...</span>
-                        </div>
-                        <p class="mt-2">{{ isEditMode ? 'Memuat data payroll...' : 'Mempersiapkan formulir...' }}</p>
-                    </div>
-                    <div v-else-if="error" class="alert alert-danger m-3">
-                        {{ error }}
-                    </div>
-                    <div v-else class="card-body">
+                    <div class="card-body">
                         <form @submit.prevent="savePayroll">
                             <div class="row">
                                 <div class="col-md-6 mb-3">
@@ -71,10 +62,7 @@
                             </div>
                             <div class="d-flex justify-content-end mt-4">
                                 <router-link to="/payroll/data-pegawai-payroll" class="btn btn-secondary me-2">Batal</router-link>
-                                <button type="submit" class="btn btn-primary" :disabled="isSubmitting">
-                                    <span v-if="isSubmitting" class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
-                                    {{ isEditMode ? 'Update' : 'Simpan' }}
-                                </button>
+                                <button type="submit" class="btn btn-primary">{{ isEditMode ? 'Update' : 'Simpan' }}</button>
                             </div>
                         </form>
                     </div>
@@ -97,18 +85,12 @@ const pegawaiStore = usePegawaiStore()
 
 const formData = ref({
     id: null as number | null,
-    pegawaiId: '' as string | number,
+    pegawaiId: '' as string,
     gajiPokok: 0,
     tunjangan: 0,
     potongan: 0,
     totalGaji: 0
 })
-
-const isSubmitting = ref(false)
-
-// Access loading and error states from the store
-const isLoading = computed(() => pegawaiStore.isLoading.value)
-const error = computed(() => pegawaiStore.error.value)
 
 const isEditMode = computed(() => {
     return route.params.id !== undefined
@@ -118,24 +100,18 @@ const isEditMode = computed(() => {
 const availablePegawai = computed(() => {
     if (isEditMode.value) {
         // For edit mode, just return all employees
-        return pegawaiStore.pegawaiList.value
+        return pegawaiStore.pegawaiList
     } else {
         // For add mode, filter out employees that already have payroll data
-        return pegawaiStore.pegawaiList.value.filter((pegawai: any) => {
-            return !pegawaiStore.pegawaiPayrollList.value.some((payroll: { pegawaiId: number }) => 
-                payroll.pegawaiId === pegawai.id
-            )
+        return pegawaiStore.pegawaiList.filter(pegawai => {
+            return !pegawaiStore.pegawaiPayrollList.some(payroll => payroll.pegawaiId === pegawai.id)
         })
     }
 })
 
 const selectedPegawai = computed(() => {
     if (!formData.value.pegawaiId) return null
-    return pegawaiStore.getPegawaiById(
-        typeof formData.value.pegawaiId === 'string' 
-            ? parseInt(formData.value.pegawaiId) 
-            : formData.value.pegawaiId
-    )
+    return pegawaiStore.getPegawaiById(parseInt(formData.value.pegawaiId))
 })
 
 watch(() => formData.value.pegawaiId, (newVal) => {
@@ -148,43 +124,20 @@ watch(() => formData.value.pegawaiId, (newVal) => {
     }
 })
 
-onMounted(async () => {
-    try {
-        // Load employees if not already loaded
-        if (!pegawaiStore.pegawaiList.value.length) {
-            await pegawaiStore.fetchPegawaiList()
-        }
+onMounted(() => {
+    if (isEditMode.value) {
+        const payrollId = parseInt(route.params.id as string)
+        const payroll = pegawaiStore.getPegawaiPayrollById(payrollId)
         
-        // Load payroll data if not already loaded
-        if (!pegawaiStore.pegawaiPayrollList.value.length) {
-            await pegawaiStore.fetchPegawaiPayrollList()
-        }
-        
-        // If in edit mode, fetch payroll data
-        if (isEditMode.value) {
-            const payrollId = parseInt(route.params.id as string)
-            
-            // Check if the data is already loaded in the store
-            let payroll = pegawaiStore.getPegawaiPayrollById(payrollId)
-            
-            // If not found in store, fetch it
-            if (!payroll) {
-                await pegawaiStore.fetchPegawaiPayrollList()
-                payroll = pegawaiStore.getPegawaiPayrollById(payrollId)
-            }
-            
-            if (payroll) {
-                formData.value = { 
-                    ...payroll,
-                    pegawaiId: payroll.pegawaiId
+        if (payroll) {
+                    formData.value = { 
+                        ...payroll,
+                        pegawaiId: payroll.pegawaiId.toString() 
+                    }
+                } else {
+                    // Handle case when payroll data is not found
+                    router.push('/payroll/data-pegawai-payroll')
                 }
-            } else {
-                // Handle case when payroll data is not found
-                router.push('/payroll/data-pegawai-payroll')
-            }
-        }
-    } catch (err) {
-        console.error('Failed to load data:', err)
     }
 })
 
@@ -196,34 +149,21 @@ function calculateTotal() {
     formData.value.totalGaji = gajiPokok + tunjangan - potongan
 }
 
-async function savePayroll() {
-    try {
-        isSubmitting.value = true
-        
-        const payrollData = {
+function savePayroll() {
+    if (isEditMode.value) {
+        pegawaiStore.updatePegawaiPayroll({
             ...formData.value,
-            pegawaiId: typeof formData.value.pegawaiId === 'string' 
-                ? parseInt(formData.value.pegawaiId) 
-                : formData.value.pegawaiId
-        }
-        
-        if (isEditMode.value) {
-            await pegawaiStore.updatePegawaiPayroll({
-                ...payrollData,
-                id: formData.value.id as number
-            })
-        } else {
-            await pegawaiStore.addPegawaiPayroll({
-                ...payrollData,
-                id: formData.value.id === null ? undefined : formData.value.id
-            })
-        }
-        
-        router.push('/payroll/data-pegawai-payroll')
-    } catch (err) {
-        console.error('Failed to save payroll:', err)
-    } finally {
-        isSubmitting.value = false
+            id: formData.value.id as number,
+            pegawaiId: parseInt(formData.value.pegawaiId)
+        })
+    } else {
+        pegawaiStore.addPegawaiPayroll({
+            ...formData.value,
+            id: formData.value.id === null ? undefined : formData.value.id,
+            pegawaiId: parseInt(formData.value.pegawaiId)
+        })
     }
+    
+    router.push('/payroll/data-pegawai-payroll')
 }
 </script>
